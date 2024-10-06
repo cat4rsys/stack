@@ -4,7 +4,7 @@
 
 int main()
 {
-    Stack stk = {};
+    Stack stk = {}; //
 
     stk.logFile = fopen("logfile.htm", "w");
     logInit(stk.logFile);

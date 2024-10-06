@@ -1,7 +1,7 @@
 #include <cstdlib>
 #include <cassert>
 #include <cstdio>
-#include <cstring>
+#include <cstring> //
 #include "stack.h"
 #include "log.h"
 
@@ -64,7 +64,6 @@ int stackCtor(Stack * stk, int initialSize, const char * name, int line, const c
 int stackPush(Stack * stk, stackElem_t newElement, int line, const char * file)
 {
     int error = stackVerifier(stk);
-    if (error) return error;
 
     if (stk->size == stk->capacity) stackRealloc(stk, stk->capacity * 2);
 
@@ -78,13 +77,13 @@ int stackPush(Stack * stk, stackElem_t newElement, int line, const char * file)
 
     DO_LOG_DUMP(stk->logFile, stk, line, file);
 
-    return errorCode;
+    return error;
 }
 
 int stackPop(Stack * stk, stackElem_t * poppedElement, int line, const char * file)
 {
     int error = stackVerifier(stk);
-    if (error) return error;
+    if (error || stk->status) return error;
 
     if (stk->size == 0) {
         printf("Stack is clear. Nothing to pop!\n");
@@ -136,7 +135,6 @@ void stackDump(Stack * stk, int lineDump, const char * funcDump, const char * fi
     printf("    data     = %p\n", stk->data);
     printf("    size     = %d\n", stk->size);
     printf("    capacity = %d\n\n", stk->capacity);
-    if (!stk->data) return;
 
     printf("ACTUAL DATA IN STACK\n\n");
 

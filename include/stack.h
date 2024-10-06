@@ -32,7 +32,7 @@
 	stackDtor(stk, __LINE__, __FILE__);                                    \
 }
 
-typedef double  stackElem_t;
+typedef double  stackElem_t; //
 typedef int64_t canary_t;
 typedef int64_t hash_t;
 

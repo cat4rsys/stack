@@ -6,4 +6,4 @@
 
 void logInit(FILE * logFile);
 void logClose(FILE * logFile);
-void logDump(FILE * logFile, Stack * stk, int line, const char * func, const char * file);
+void logDump(FILE * logFile, Stack * stk, int line, const char * func, const char * file); //
