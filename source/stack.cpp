@@ -20,11 +20,18 @@ static void stackRealloc(Stack * stk, int newCapacity)
 
     stk->capacity = newCapacity;
     stk->data     = (stackElem_t *)(ptrToCanary + sizeof(canary_t));
+
+    stk->strHash  = countStrHashSum(stk);
 }
 
 int stackCtor(Stack * stk, int initialSize, const char * name, int line, const char * func, const char * file)
 {
     if (!stk) return stackVerifier(stk);
+    if (initialSize < 0) {
+        stk->capacity = initialSize;
+        stk->status = stackVerifier(stk);
+        return stk->status;
+    }
 
     stk->name = name;
     stk->line = line;
@@ -52,6 +59,7 @@ int stackCtor(Stack * stk, int initialSize, const char * name, int line, const c
     memset( (void *) stk->data, poison, initialSize * sizeof(stackElem_t) );
 
     stk->hash = countHashSum(stk);
+    stk->strHash  = countStrHashSum(stk);
 
     int errorCode = stackVerifier(stk);
     stk->status = errorCode;
@@ -64,6 +72,11 @@ int stackCtor(Stack * stk, int initialSize, const char * name, int line, const c
 int stackPush(Stack * stk, stackElem_t newElement, int line, const char * file)
 {
     int error = stackVerifier(stk);
+    if (error || stk->status) {
+        stk->status = error;
+        DO_LOG_DUMP(stk->logFile, stk, line, file);
+        return error;
+    }
 
     if (stk->size == stk->capacity) stackRealloc(stk, stk->capacity * 2);
 
@@ -71,6 +84,8 @@ int stackPush(Stack * stk, stackElem_t newElement, int line, const char * file)
 
     stk->size += 1;
     stk->hash = countHashSum(stk);
+
+    stk->strHash  = countStrHashSum(stk);
 
     int errorCode = stackVerifier(stk);
     stk->status = errorCode;
@@ -83,7 +98,11 @@ int stackPush(Stack * stk, stackElem_t newElement, int line, const char * file)
 int stackPop(Stack * stk, stackElem_t * poppedElement, int line, const char * file)
 {
     int error = stackVerifier(stk);
-    if (error || stk->status) return error;
+    if (error || stk->status) {
+        stk->status = error;
+        DO_LOG_DUMP(stk->logFile, stk, line, file);
+        return error;
+    }
 
     if (stk->size == 0) {
         printf("Stack is clear. Nothing to pop!\n");
@@ -99,6 +118,7 @@ int stackPop(Stack * stk, stackElem_t * poppedElement, int line, const char * fi
     if ( (stk->size > stk->minCapacity) && (stk->size < stk->capacity / 4) ) stackRealloc(stk, stk->capacity / 2);
 
     stk->hash = countHashSum(stk);
+    stk->strHash  = countStrHashSum(stk);
 
     int errorCode = stackVerifier(stk);
     stk->status = errorCode;
@@ -110,6 +130,13 @@ int stackPop(Stack * stk, stackElem_t * poppedElement, int line, const char * fi
 
 void stackDtor(Stack * stk, int line, const char * file)
 {
+    int error = stackVerifier(stk);
+    if (error || stk->status) {
+        stk->status = error;
+        DO_LOG_DUMP(stk->logFile, stk, line, file);
+        return;
+    }
+
     free( (char *)stk->data - sizeof(canary_t) );
     stk->data = 0;
     stk->capacity = -1;
@@ -127,8 +154,8 @@ void stackDump(Stack * stk, int lineDump, const char * funcDump, const char * fi
 
     printf("    Stack [%p]\n", stk);
     printf("    called from %s:%d (%s)\n", fileDump, lineDump, funcDump);
-    printf("    name %s born at function %s at %s:%d\n\n", stk->name, stk->func, stk->file, stk->line);
     if (!stk) return;
+    printf("    name %s born at function %s at %s:%d\n\n", stk->name, stk->func, stk->file, stk->line);
 
     printf("ACTUAL INFORMATION\n\n");
 
@@ -136,6 +163,7 @@ void stackDump(Stack * stk, int lineDump, const char * funcDump, const char * fi
     printf("    size     = %d\n", stk->size);
     printf("    capacity = %d\n\n", stk->capacity);
 
+    if (!stk->data) return;
     printf("ACTUAL DATA IN STACK\n\n");
 
     for(int i = 0; i < stk->size; i++) {
@@ -159,7 +187,7 @@ int stackVerifier(Stack * stk)
     if (stk->capacity < 0)                                                                  error |= STK_CAPACITY_BELOW_ZERO;
     if (stk->capacity < stk->size)                                                          error |= STK_CAPACITY_LESS_SIZE;
     if (stk->leftCanary != canary)                                                          error |= STK_L_CANARY_DIED;
-    if (stk->leftCanary != canary)                                                          error |= STK_R_CANARY_DIED;
+    if (stk->rightCanary != canary)                                                         error |= STK_R_CANARY_DIED;
     if (!stk->data)                                                                         return error;
     if (*(canary_t *)((char *)stk->data - sizeof(canary_t)) != canary )                     error |= STK_L_DATA_CANARY_DIED;
     if (*(canary_t *)((char *)stk->data + stk->capacity * sizeof(stackElem_t)) != canary )  error |= STK_R_DATA_CANARY_DIED;
@@ -174,6 +202,19 @@ hash_t countHashSum(Stack * stk)
     for( int i = 0; i < stk->size; i++ ) {
         hash = hash * 33 ^ (hash_t)stk->data[i];
     }
+
+    return hash;
+}
+
+hash_t countStrHashSum(Stack * stk)
+{
+    hash_t hash = 0;
+
+    hash = hash * 33 ^ (hash_t)stk->data;
+    hash = hash * 33 ^ (hash_t)stk->capacity;
+    hash = hash * 33 ^ (hash_t)stk->minCapacity;
+    hash = hash * 33 ^ (hash_t)stk->size;
+    hash = hash * 33 ^ (hash_t)stk->status;
 
     return hash;
 }
@@ -220,6 +261,10 @@ void readError(int code)
     if (code % (1 << 10) != 0) {
         printf("Incorrect hash sum of data\n");
         code -= STK_INCORR_DATA_HASH;
+    }
+    if (code % (1 << 11) != 0) {
+        printf("Incorrect hash sum of structure\n");
+        code -= STK_INCORR_STR_HASH;
     }
 
     printf("\n");
@@ -268,6 +313,10 @@ void logReadError(int code, FILE * logFile)
     if (code % (1 << 10) != 0) {
         fprintf(logFile, "<p>Incorrect hash sum of data</p>\n");
         code -= STK_INCORR_DATA_HASH;
+    }
+    if (code % (1 << 10) != 0) {
+        fprintf(logFile, "<p>Incorrect hash sum of structure</p>\n");
+        code -= STK_INCORR_STR_HASH;
     }
 
     printf("\n");

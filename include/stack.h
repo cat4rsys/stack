@@ -49,7 +49,8 @@ enum StackError {
 	STK_R_CANARY_DIED       = 1 << 6,
 	STK_L_DATA_CANARY_DIED  = 1 << 7,
 	STK_R_DATA_CANARY_DIED  = 1 << 8,
-	STK_INCORR_DATA_HASH    = 1 << 9
+	STK_INCORR_DATA_HASH    = 1 << 9,
+	STK_INCORR_STR_HASH     = 1 << 10
 };
 
 typedef struct
@@ -71,6 +72,7 @@ typedef struct
 	int minCapacity;
 
 	hash_t hash;
+	hash_t strHash;
 
 	canary_t rightCanary;
 } Stack;
@@ -88,6 +90,8 @@ void stackDump(Stack * stk, int lineDump, const char * funcDump, const char * fi
 int stackVerifier(Stack * stk);
 
 hash_t countHashSum(Stack * stk);
+
+hash_t countStrHashSum(Stack * stk);
 
 void readError(int code);
 
