@@ -29,6 +29,7 @@ void logInit(FILE * logFile)
 
 void logDump(FILE * logFile, Stack * stk, int line, const char * func, const char * file)
 {
+    #ifdef DEBUG
     counterOfDumps++;
     int errorCode = stackVerifier(stk);
 
@@ -79,6 +80,8 @@ void logDump(FILE * logFile, Stack * stk, int line, const char * func, const cha
 
     fprintf(logFile, "</ul>\n");
     fprintf(logFile, "</li>\n\n");
+
+    #endif // DEBUG
 }
 
 void logClose(FILE * logFile)

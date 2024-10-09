@@ -1,6 +1,6 @@
 #include <cstdio>
 
-#define DO_LOG_DUMP(logFile, stk, line, file) {                                               \
+#define DO_LOG_DUMP(logFile, stk, line, file) {                           \
 	logDump(logFile, stk, line, __func__, file);                          \
 }
 

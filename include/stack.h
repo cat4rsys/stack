@@ -25,7 +25,7 @@
 }
 
 #define DO_STACK_POP(stk, pushedElement) {                                 \
-	stackPop(stk, pushedElement, __LINE__, __FILE__);                     \
+	stackPop(stk, pushedElement, __LINE__, __FILE__);                      \
 }
 
 #define DO_STACK_DTOR(stk) {                                               \

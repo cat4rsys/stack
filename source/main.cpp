@@ -4,26 +4,24 @@
 
 int main()
 {
-Stack stk = {}; //
+    Stack stk = {}; //
 
-stk.logFile = fopen("logfile.htm", "w");
-logInit(stk.logFile);
+    stk.logFile = fopen("logfile.htm", "w");
+    logInit(stk.logFile);
 
-DO_STACK_CTOR(&stk, 20);
+    DO_STACK_CTOR(&stk, 20);
 
-stackElem_t x = 0;
+    stackElem_t x = 0;
 
-for (int i = 0; i < 100; i++) {
-    DO_STACK_PUSH(&stk, 11);
-}
+    for (int i = 0; i < 100; i++) {
+        DO_STACK_PUSH(&stk, 11);
+    }
 
-stk.data[40] = 2321;
+    DO_STACK_POP(&stk, &x);
 
-DO_STACK_POP(&stk, &x);
+    DO_STACK_DUMP(&stk);
 
-DO_STACK_DUMP(&stk);
+    DO_STACK_DTOR(&stk);
 
-DO_STACK_DTOR(&stk);
-
-return 0;
+    return 0;
 }

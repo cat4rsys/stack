@@ -7,6 +7,7 @@
 
 static void stackRealloc(Stack * stk, int newCapacity)
 {
+#ifdef SECURE
     size_t sizeOfData = 2 * sizeof(canary_t) + newCapacity * sizeof(stackElem_t);
     size_t leveledSizeOfData = sizeOfData % levelBytes > 0 ? sizeOfData + ( levelBytes - sizeOfData % levelBytes ) : sizeOfData;
 
@@ -18,10 +19,16 @@ static void stackRealloc(Stack * stk, int newCapacity)
         memset((void *) (stk->data + stk->capacity), poison, (newCapacity - stk->capacity) * sizeof(stackElem_t));
     }
 
-    stk->capacity = newCapacity;
     stk->data     = (stackElem_t *)(ptrToCanary + sizeof(canary_t));
+#else
+    stk->data = (stackElem_t *)realloc((void *) stk->data, newCapacity * sizeof(stackElem_t));
+#endif // SECURE
 
+    stk->capacity = newCapacity;
+
+#ifdef SECURE
     stk->strHash  = countStrHashSum(stk);
+#endif // SECURE
 }
 
 int stackCtor(Stack * stk, int initialSize, const char * name, int line, const char * func, const char * file)
@@ -33,11 +40,14 @@ int stackCtor(Stack * stk, int initialSize, const char * name, int line, const c
         return stk->status;
     }
 
+#ifdef DEBUG
     stk->name = name;
     stk->line = line;
     stk->func = func;
     stk->file = file;
+#endif // DEBUG
 
+#ifdef SECURE
     stk->leftCanary  = canary;
     stk->rightCanary = canary;
 
@@ -51,20 +61,27 @@ int stackCtor(Stack * stk, int initialSize, const char * name, int line, const c
     *( (canary_t *)(ptrToCanary + (leveledSizeOfData - sizeof(canary_t))) ) = canary;
 
     stk->data = (stackElem_t *)(ptrToCanary + sizeof(canary_t));
+#else
+    stk->data = (stackElem_t *)calloc(initialSize, sizeof(stackElem_t));
+#endif // SECURE
 
     stk->size        = 0;
     stk->capacity    = initialSize;
     stk->minCapacity = initialSize;
 
+#ifdef SECURE
     memset( (void *) stk->data, poison, initialSize * sizeof(stackElem_t) );
 
     stk->hash = countHashSum(stk);
     stk->strHash  = countStrHashSum(stk);
+#endif // SECURE
 
     int errorCode = stackVerifier(stk);
     stk->status = errorCode;
 
+#ifdef DEBUG
     DO_LOG_DUMP(stk->logFile, stk, line, file);
+#endif // DEBUG
 
     return errorCode;
 }
@@ -74,7 +91,9 @@ int stackPush(Stack * stk, stackElem_t newElement, int line, const char * file)
     int error = stackVerifier(stk);
     if (error || stk->status) {
         stk->status = error;
+#ifdef DEBUG
         DO_LOG_DUMP(stk->logFile, stk, line, file);
+#endif // DEBUG
         return error;
     }
 
@@ -83,14 +102,18 @@ int stackPush(Stack * stk, stackElem_t newElement, int line, const char * file)
     stk->data[stk->size] = newElement;
 
     stk->size += 1;
+#ifdef SECURE
     stk->hash = countHashSum(stk);
 
     stk->strHash  = countStrHashSum(stk);
+#endif // SECURE
 
     int errorCode = stackVerifier(stk);
     stk->status = errorCode;
 
+#ifdef DEBUG
     DO_LOG_DUMP(stk->logFile, stk, line, file);
+#endif // DEBUG
 
     return error;
 }
@@ -100,7 +123,9 @@ int stackPop(Stack * stk, stackElem_t * poppedElement, int line, const char * fi
     int error = stackVerifier(stk);
     if (error || stk->status) {
         stk->status = error;
+#ifdef DEBUG
         DO_LOG_DUMP(stk->logFile, stk, line, file);
+#endif // DEBUG
         return error;
     }
 
@@ -113,17 +138,23 @@ int stackPop(Stack * stk, stackElem_t * poppedElement, int line, const char * fi
 
     *poppedElement = stk->data[stk->size];
 
+#ifdef SECURE
     stk->data[stk->size] = poison;
+#endif // SECURE
 
     if ( (stk->size > stk->minCapacity) && (stk->size < stk->capacity / 4) ) stackRealloc(stk, stk->capacity / 2);
 
+#ifdef SECURE
     stk->hash = countHashSum(stk);
     stk->strHash  = countStrHashSum(stk);
+#endif // SECURE
 
     int errorCode = stackVerifier(stk);
     stk->status = errorCode;
 
+#ifdef DEBUG
     DO_LOG_DUMP(stk->logFile, stk, line, file);
+#endif // DEBUG
 
     return errorCode;
 }
@@ -133,24 +164,32 @@ void stackDtor(Stack * stk, int line, const char * file)
     int error = stackVerifier(stk);
     if (error || stk->status) {
         stk->status = error;
+#ifdef DEBUG
         DO_LOG_DUMP(stk->logFile, stk, line, file);
+#endif // DEBUG
         return;
     }
 
+#ifdef SECURE
     free( (char *)stk->data - sizeof(canary_t) );
+#else
+    free(stk->data);
+#endif // SECURE
     stk->data = 0;
     stk->capacity = -1;
+#ifdef DEBUG
     DO_LOG_DUMP(stk->logFile, stk, line, file);
+#endif // DEBUG
 }
 
-// html fprintf(file.ht)
 void stackDump(Stack * stk, int lineDump, const char * funcDump, const char * fileDump)
 {
     printf("INFO ABOUT STACK\n\n");
-
+#ifdef DEBUG
     int errorCode = stackVerifier(stk);
     printf("Actual code of error : %d\n", errorCode);
     readError(errorCode);
+#endif // DEBUG
 
     printf("    Stack [%p]\n", stk);
     printf("    called from %s:%d (%s)\n", fileDump, lineDump, funcDump);
@@ -186,16 +225,19 @@ int stackVerifier(Stack * stk)
     if (!stk->data)                                                                         error |= STK_DATA_NULL;
     if (stk->capacity < 0)                                                                  error |= STK_CAPACITY_BELOW_ZERO;
     if (stk->capacity < stk->size)                                                          error |= STK_CAPACITY_LESS_SIZE;
+#ifdef SECURE
     if (stk->leftCanary != canary)                                                          error |= STK_L_CANARY_DIED;
     if (stk->rightCanary != canary)                                                         error |= STK_R_CANARY_DIED;
     if (!stk->data)                                                                         return error;
     if (*(canary_t *)((char *)stk->data - sizeof(canary_t)) != canary )                     error |= STK_L_DATA_CANARY_DIED;
     if (*(canary_t *)((char *)stk->data + stk->capacity * sizeof(stackElem_t)) != canary )  error |= STK_R_DATA_CANARY_DIED;
     if (stk->hash != countHashSum(stk))                                                     error |= STK_INCORR_DATA_HASH;
+#endif // SECURE
 
     return error;
 }
 
+#ifdef SECURE
 hash_t countHashSum(Stack * stk)
 {
     hash_t hash = 0;
@@ -218,7 +260,9 @@ hash_t countStrHashSum(Stack * stk)
 
     return hash;
 }
+#endif // SECURE
 
+#ifdef DEBUG
 void readError(int code)
 {
     if (code == 0) {
@@ -226,45 +270,35 @@ void readError(int code)
         return;
     }
 
-    if (code % STK_DATA_NULL != 0) {
+    if ((code & STK_NULL_PTR) != 0) {
         printf("NULL ptr to structure\n");
-        code -= STK_NULL_PTR;
     }
-    if (code % STK_CAPACITY_BELOW_ZERO != 0) {
+    if ((code & STK_DATA_NULL) != 0) {
         printf("NULL ptr to data in structure\n");
-        code -= STK_DATA_NULL;
     }
-    if (code % STK_CAPACITY_LESS_SIZE != 0) {
+    if ((code & STK_CAPACITY_BELOW_ZERO) != 0) {
         printf("Capacity of stack below zero\n");
-        code -= STK_CAPACITY_BELOW_ZERO;
     }
-    if (code % STK_L_CANARY_DIED != 0) {
+    if ((code & STK_CAPACITY_LESS_SIZE) != 0) {
         printf("Capacity is lower than size\n");
-        code -= STK_CAPACITY_LESS_SIZE;
     }
-    if (code % STK_R_CANARY_DIED != 0) {
+    if ((code & STK_L_CANARY_DIED) != 0) {
         printf("Left canary of struct died\n");
-        code -= STK_L_CANARY_DIED;
     }
-    if (code % STK_L_DATA_CANARY_DIED != 0) {
+    if ((code & STK_R_CANARY_DIED) != 0) {
         printf("Right canary of struct died\n");
-        code -= STK_R_CANARY_DIED;
     }
-    if (code % STK_R_DATA_CANARY_DIED != 0) {
+    if ((code & STK_L_DATA_CANARY_DIED) != 0) {
         printf("Left canary of data died\n");
-        code -= STK_L_DATA_CANARY_DIED;
     }
-    if (code % STK_INCORR_DATA_HASH != 0) {
+    if ((code & STK_R_DATA_CANARY_DIED) != 0) {
         printf("Right canary of data died\n");
-        code -= STK_R_DATA_CANARY_DIED;
     }
-    if (code % (1 << 10) != 0) {
+    if ((code & STK_INCORR_DATA_HASH) != 0) {
         printf("Incorrect hash sum of data\n");
-        code -= STK_INCORR_DATA_HASH;
     }
-    if (code % (1 << 11) != 0) {
+    if ((code & STK_INCORR_STR_HASH) != 0) {
         printf("Incorrect hash sum of structure\n");
-        code -= STK_INCORR_STR_HASH;
     }
 
     printf("\n");
@@ -278,47 +312,36 @@ void logReadError(int code, FILE * logFile)
         return;
     }
 
-    if (code % STK_DATA_NULL != 0) {
+    if ((code & STK_NULL_PTR) != 0) {
         fprintf(logFile, "<p>NULL ptr to structure</p>\n");
-        code -= STK_NULL_PTR;
     }
-    if (code % STK_CAPACITY_BELOW_ZERO != 0) {
+    if ((code & STK_DATA_NULL) != 0) {
         fprintf(logFile, "<p>NULL ptr to data in structure</p>\n");
-        code -= STK_DATA_NULL;
     }
-    if (code % STK_CAPACITY_LESS_SIZE != 0) {
+    if ((code & STK_CAPACITY_BELOW_ZERO) != 0) {
         fprintf(logFile, "<p>Capacity of stack below zero</p>\n");
-        code -= STK_CAPACITY_BELOW_ZERO;
     }
-    if (code % STK_L_CANARY_DIED != 0) {
+    if ((code & STK_CAPACITY_LESS_SIZE) != 0) {
         fprintf(logFile, "<p>Capacity is lower than size</p>\n");
-        code -= STK_CAPACITY_LESS_SIZE;
     }
-    if (code % STK_R_CANARY_DIED != 0) {
+    if ((code & STK_L_CANARY_DIED) != 0) {
         fprintf(logFile, "<p>Left canary of struct died</p>\n");
-        code -= STK_L_CANARY_DIED;
     }
-    if (code % STK_L_DATA_CANARY_DIED != 0) {
+    if ((code & STK_R_CANARY_DIED) != 0) {
         fprintf(logFile, "<p>Right canary of struct died</p>\n");
-        code -= STK_R_CANARY_DIED;
     }
-    if (code % STK_R_DATA_CANARY_DIED != 0) {
+    if ((code & STK_L_DATA_CANARY_DIED) != 0) {
         fprintf(logFile, "<p>Left canary of data died</p>\n");
-        code -= STK_L_DATA_CANARY_DIED;
     }
-    if (code % STK_INCORR_DATA_HASH != 0) {
+    if ((code & STK_R_DATA_CANARY_DIED) != 0) {
         fprintf(logFile, "<p>Right canary of data died</p>\n");
-        code -= STK_R_DATA_CANARY_DIED;
     }
-    if (code % (1 << 10) != 0) {
+    if ((code & STK_INCORR_DATA_HASH) != 0) {
         fprintf(logFile, "<p>Incorrect hash sum of data</p>\n");
-        code -= STK_INCORR_DATA_HASH;
     }
-    if (code % (1 << 10) != 0) {
+    if ((code & STK_INCORR_STR_HASH) != 0) {
         fprintf(logFile, "<p>Incorrect hash sum of structure</p>\n");
-        code -= STK_INCORR_STR_HASH;
     }
-
-    printf("\n");
     return;
 }
+#endif // DEBUG
